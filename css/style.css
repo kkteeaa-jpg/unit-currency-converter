@@ -1,0 +1,159 @@
+/* ==========================================================================
+   1. Глобальний Reset та блокова модель (Box Model)
+   ========================================================================== */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #24292f;
+    background-color: #f6f8fa;
+}
+
+/* ==========================================================================
+   2. Шапка (Header)
+   ========================================================================== */
+header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #d0d7de;
+    padding: 1.5rem 1rem;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    color: #0969da;
+}
+
+/* ==========================================================================
+   3. Основний контейнер (Main) та секції (Sections)
+   ========================================================================== */
+main {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+section {
+    background-color: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+section h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    color: #24292f;
+    border-bottom: 1px solid #eaeef2;
+    padding-bottom: 0.5rem;
+}
+
+/* ==========================================================================
+   4. Елементи форми (Варіант 6)
+   ========================================================================== */
+fieldset {
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0;
+}
+
+legend {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #57606a;
+    padding: 0 0.5rem;
+}
+
+#category-selection label {
+    margin-right: 1.25rem;
+    cursor: pointer;
+}
+
+#converter-form > div {
+    margin-bottom: 1.25rem;
+}
+
+#converter-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #24292f;
+}
+
+/* Поля вводу та селектори */
+input[type="number"],
+select {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1rem;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background-color: #ffffff;
+    color: #24292f;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[type="number"]:focus,
+select:focus {
+    outline: none;
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+
+/* Кнопка конвертації */
+button#convert-btn {
+    display: block;
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: #0969da;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 1.25rem;
+    transition: background-color 0.2s ease;
+}
+
+button#convert-btn:hover {
+    background-color: #044289;
+}
+
+/* Поле виводу результату */
+output#result-output {
+    display: block;
+    padding: 12px;
+    background-color: #f6f8fa;
+    border: 1px dashed #d0d7de;
+    border-radius: 6px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #0969da;
+    text-align: center;
+}
+
+/* ==========================================================================
+   5. Підвал (Footer)
+   ========================================================================== */
+footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 0.85rem;
+    color: #57606a;
+}
+
+footer p {
+    margin: 0;
+}
