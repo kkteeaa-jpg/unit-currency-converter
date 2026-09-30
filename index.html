@@ -39,22 +39,27 @@
                     <input type="number" id="input-value" name="inputValue" placeholder="Введіть число" step="any" required>
                 </div>
 
-                <div>
-                    <label for="source-unit">Початкова одиниця:</label>
-                    <select id="source-unit" name="sourceUnit">
-                        <option value="USD">USD (Долар США)</option>
-                        <option value="EUR">EUR (Євро)</option>
-                        <option value="UAH">UAH (Гривня)</option>
-                    </select>
-                </div>
+                <!-- Блок одиниць з/в для адаптивного переходу на flex-рядок (Вимога варіанта 6) -->
+                <div class="units-wrapper">
+                    <div class="unit-field">
+                        <label for="source-unit">Початкова одиниця:</label>
+                        <select id="source-unit" name="sourceUnit">
+                            <option value="USD">USD (Долар США)</option>
+                            <option value="EUR">EUR (Євро)</option>
+                            <option value="UAH">UAH (Гривня)</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="target-unit">Кінцева одиниця:</label>
-                    <select id="target-unit" name="targetUnit">
-                        <option value="UAH">UAH (Гривня)</option>
-                        <option value="USD">USD (Долар США)</option>
-                        <option value="EUR">EUR (Євро)</option>
-                    </select>
+                    <button type="button" id="swap-btn" title="Поміняти місцями" aria-label="Поміняти одиниці місцями">&#8646;</button>
+
+                    <div class="unit-field">
+                        <label for="target-unit">Кінцева одиниця:</label>
+                        <select id="target-unit" name="targetUnit">
+                            <option value="UAH">UAH (Гривня)</option>
+                            <option value="USD">USD (Долар США)</option>
+                            <option value="EUR">EUR (Євро)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button type="button" id="convert-btn">Конвертувати</button>

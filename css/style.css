@@ -1,8 +1,10 @@
-/* ==========================================================================
-   1. Глобальний Reset та блокова модель (Box Model)
-   ========================================================================== */
 *, *::before, *::after {
     box-sizing: border-box;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
 }
 
 body {
@@ -14,14 +16,14 @@ body {
     background-color: #f6f8fa;
 }
 
-/* ==========================================================================
-   2. Шапка (Header)
-   ========================================================================== */
 header {
     background-color: #ffffff;
     border-bottom: 1px solid #d0d7de;
     padding: 1.5rem 1rem;
     text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 header h1 {
@@ -30,9 +32,6 @@ header h1 {
     color: #0969da;
 }
 
-/* ==========================================================================
-   3. Основний контейнер (Main) та секції (Sections)
-   ========================================================================== */
 main {
     max-width: 600px;
     margin: 2rem auto;
@@ -57,9 +56,6 @@ section h2 {
     padding-bottom: 0.5rem;
 }
 
-/* ==========================================================================
-   4. Елементи форми (Варіант 6)
-   ========================================================================== */
 fieldset {
     border: 1px solid #d0d7de;
     border-radius: 6px;
@@ -79,6 +75,11 @@ legend {
     cursor: pointer;
 }
 
+#converter-form {
+    display: flex;
+    flex-direction: column;
+}
+
 #converter-form > div {
     margin-bottom: 1.25rem;
 }
@@ -91,7 +92,35 @@ legend {
     color: #24292f;
 }
 
-/* Поля вводу та селектори */
+.units-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.unit-field {
+    width: 100%;
+}
+
+#swap-btn {
+    align-self: center;
+    background-color: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 1.25rem;
+    color: #0969da;
+    cursor: pointer;
+    line-height: 1;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+#swap-btn:hover {
+    background-color: #f3f4f6;
+    border-color: #0969da;
+}
+
 input[type="number"],
 select {
     width: 100%;
@@ -111,7 +140,6 @@ select:focus {
     box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
 }
 
-/* Кнопка конвертації */
 button#convert-btn {
     display: block;
     width: 100%;
@@ -131,7 +159,6 @@ button#convert-btn:hover {
     background-color: #044289;
 }
 
-/* Поле виводу результату */
 output#result-output {
     display: block;
     padding: 12px;
@@ -144,9 +171,6 @@ output#result-output {
     text-align: center;
 }
 
-/* ==========================================================================
-   5. Підвал (Footer)
-   ========================================================================== */
 footer {
     text-align: center;
     padding: 2rem 1rem;
@@ -156,4 +180,52 @@ footer {
 
 footer p {
     margin: 0;
+}
+
+@media (min-width: 600px) {
+    .units-wrapper {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 0.75rem;
+    }
+
+    .unit-field {
+        flex: 1;
+    }
+
+    #swap-btn {
+        align-self: flex-end;
+        height: 48px;
+        min-width: 48px;
+        margin-bottom: 0;
+    }
+
+    #category-selection fieldset {
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        justify-content: start;
+        align-items: center;
+        gap: 1rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    main {
+        max-width: 720px;
+        margin: 3.5rem auto;
+        padding: 0 2rem;
+    }
+
+    section {
+        padding: 2.25rem;
+        margin-bottom: 2rem;
+    }
+
+    header {
+        padding: 2rem 1rem;
+    }
+
+    header h1 {
+        font-size: 2rem;
+    }
 }
