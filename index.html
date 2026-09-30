@@ -18,14 +18,22 @@
             <form>
                 <fieldset>
                     <legend>Оберіть категорію величин:</legend>
-                    <input type="radio" id="type-currency" name="conversion-category" value="currency" checked>
-                    <label for="type-currency">Валюта</label>
+                    <div class="radio-group">
+                        <span class="radio-item">
+                            <input type="radio" id="type-currency" name="conversion-category" value="currency" checked>
+                            <label for="type-currency">Валюта</label>
+                        </span>
 
-                    <input type="radio" id="type-length" name="conversion-category" value="length">
-                    <label for="type-length">Довжина</label>
+                        <span class="radio-item">
+                            <input type="radio" id="type-length" name="conversion-category" value="length">
+                            <label for="type-length">Довжина</label>
+                        </span>
 
-                    <input type="radio" id="type-weight" name="conversion-category" value="weight">
-                    <label for="type-weight">Вага</label>
+                        <span class="radio-item">
+                            <input type="radio" id="type-weight" name="conversion-category" value="weight">
+                            <label for="type-weight">Вага</label>
+                        </span>
+                    </div>
                 </fieldset>
             </form>
         </section>
@@ -39,7 +47,7 @@
                     <input type="number" id="input-value" name="inputValue" placeholder="Введіть число" step="any" required>
                 </div>
 
-                <!-- Блок одиниць з/в для адаптивного переходу на flex-рядок (Вимога варіанта 6) -->
+                <!-- Блок одиниць з/в для адаптивного переходу на flex-рядок -->
                 <div class="units-wrapper">
                     <div class="unit-field">
                         <label for="source-unit">Початкова одиниця:</label>
