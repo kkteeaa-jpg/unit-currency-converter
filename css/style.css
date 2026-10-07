@@ -196,6 +196,8 @@ select:focus {
 #swap-btn {
   align-self: center;
   width: var(--control-height);
+  padding: 0;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -205,7 +207,6 @@ select:focus {
   font-size: 1.25rem;
   color: var(--color-primary);
   cursor: pointer;
-  transform: rotate(90deg);
   transition: var(--transition);
 }
 
