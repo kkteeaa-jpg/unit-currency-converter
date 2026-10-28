@@ -45,7 +45,7 @@
             <form id="converter-form">
                 <div>
                     <label for="input-value">Значення для конвертації:</label>
-                    <input type="number" id="input-value" name="inputValue" placeholder="Введіть число" step="any" required>
+                    <input type="number" id="input-value" name="inputValue" placeholder="Введіть число" min="0.01" step="any" required>
                 </div>
 
                 <!-- Блок одиниць з/в для адаптивного переходу на flex-рядок -->
@@ -71,13 +71,19 @@
                     </div>
                 </div>
 
-                <button type="button" id="convert-btn">Конвертувати</button>
+                <button type="submit" id="convert-btn">Конвертувати</button>
 
                 <div>
                     <label for="result-output">Результат конвертації:</label>
                     <output id="result-output" for="input-value source-unit target-unit">0.00 UAH</output>
                 </div>
             </form>
+        </section>
+
+        <section id="history-section">
+            <h2>Історія конвертацій</h2>
+            <ul id="history-list"></ul>
+            <p id="history-count">Кількість збережених операцій: 0</p>
         </section>
 
         <section id="rates-section">
