@@ -88,6 +88,12 @@
 
         <section id="rates-section">
             <h2>Поточні курси валют</h2>
+
+            <button id="refresh-btn" type="button">Оновити курс</button>
+            <p id="loading-indicator" style="display: none;">Завантаження курсів..</p>
+            
+            <p id="error-message" style="display: none; color: red; font-weight: bold;"></p>
+
             <ul id="rates-list"></ul>
             <p id="rates-count"></p>
         </section>

@@ -1,4 +1,6 @@
-const rates = {
+const API_URL = 'https://api.frankfurter.dev/v1/latest?base=USD';
+
+let rates = {//змінено на let, бо значення будуть оновлюватися
     USD: 1,
     EUR: 0.92,
     UAH: 41.5
@@ -6,6 +8,30 @@ const rates = {
 
 const listContainer = document.querySelector('#rates-list'); // вибір контейнера списку та блоку підсумку в DOM
 const countContainer = document.querySelector('#rates-count');
+
+const loadingIndicator = document.querySelector('#loading-indicator');
+const errorMessage = document.querySelector('#error-message');
+const refreshBtn = document.querySelector('#refresh-btn');
+
+function showLoading(isLoading) {
+    if (loadingIndicator) {
+        loadingIndicator.style.display = isLoading ? 'block' : 'none';
+    }
+    if (refreshBtn) {
+        refreshBtn.disabled = isLoading; //блокує кнопку на час запиту
+    }
+}
+
+function showError(message) {//повідомлення про помилку
+    if (!errorMessage) return;
+    if (message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+    } else {
+        errorMessage.textContent = '';
+        errorMessage.style.display = 'none';
+    }
+}
 
 function renderRates(ratesData) { // функція рендеру списку курсів
     listContainer.innerHTML = ''; // очищення перед додаванням
@@ -29,11 +55,49 @@ function renderRates(ratesData) { // функція рендеру списку 
     countContainer.textContent = `Кількість валют у списку: ${entries.length}`; // оновлюємо кількість валют
 }
 
-renderRates(rates); // виклик функції рендеру
+async function loadData() {//головна асинхронна функція запиту до АРІ
+    showLoading(true);//Показує статус завантаження
+    showError('');//скидає старі помилки
 
-// ==========================================
-// Логіка Практикуму 8 (Варіант 6)
-// ==========================================
+    try {
+        const response = await fetch(API_URL);//відправляє запит до сервера
+        
+        if (response.status === 422) {//перевірка коду 422
+            throw new Error('Перевірте код валюти');
+        }
+
+        if (!response.ok) {//перевірка на інші помилки
+            throw new Error(`Код ${response.status}`);
+        }
+
+        const data = await response.json();//розбиває отримане тіло відповіді як JSON
+
+        rates = {//оновлює курси даними з АРІ
+            [data.base]: 1,
+            ...data.rates
+        };
+
+         renderRates(rates);//передає нові дані у функцію рендеру списку
+
+         calculateConversion();//оновлює підсумок у формі конвертера за новим куросм
+
+    } catch (error) {//обробка помилок мережі та винятків throw
+        if (error.message === 'Перевірте код валюти') {
+            showError('Перевірте код валюти');
+        } else {
+            showError('Не вдалося завантажити дані. Спробуйте пізніше.');
+        }
+        console.error('Помилка запиту:', error);
+    } finally {
+        showLoading(false);//приховує статус завантаження
+    }
+}
+
+loadData();//автоматичний запуск при відкритті сторінки
+
+if (refreshBtn) {//"слухач"події на кнопку оновлення
+    refreshBtn.addEventListener('click', loadData);
+}
 
 const conversionHistory = []; // масив для збереження записів історії
 
