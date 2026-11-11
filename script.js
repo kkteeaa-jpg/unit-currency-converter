@@ -72,7 +72,8 @@ async function loadData() {//головна асинхронна функція 
 
         const data = await response.json();//розбиває отримане тіло відповіді як JSON
 
-        rates = {//оновлює курси даними з АРІ
+        rates = {//оновлює курси даними з АРІ, але зберігає старі (UAH немає в API)
+            ...rates,
             [data.base]: 1,
             ...data.rates
         };
