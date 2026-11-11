@@ -79,7 +79,9 @@ async function loadData() {//головна асинхронна функція 
 
          renderRates(rates);//передає нові дані у функцію рендеру списку
 
-         calculateConversion();//оновлює підсумок у формі конвертера за новим куросм
+         // calculateConversion() замінено подією. Vue-компонент (js/app.js) чує 'rates-loaded' і сам перераховує результат за новими курсами
+         // calculateConversion();//оновлює підсумок у формі конвертера за новим куросм
+         document.dispatchEvent(new CustomEvent('rates-loaded', { detail: rates }));
 
     } catch (error) {//обробка помилок мережі та винятків throw
         if (error.message === 'Перевірте код валюти') {
@@ -101,22 +103,27 @@ if (refreshBtn) {//"слухач"події на кнопку оновлення
 
 const conversionHistory = []; // масив для збереження записів історії
 
+/* ручний код форми конвертера (пошук елементів, calculateConversion, слухачі input/change/click)
+   замінено Vue-компонентом ConverterForm у js/app.js. Тепер стан зберігає Vue, а результат - computed-значення
+   код залишено закоментованим, щоб він не дублювався з компонентом
+
 const form = document.querySelector('#converter-form'); // отримує елементи форми та інтерфейсу DOM
 const amountInput = document.querySelector('#input-value');
 const sourceUnitSelect = document.querySelector('#source-unit');
 const targetUnitSelect = document.querySelector('#target-unit');
 const resultOutput = document.querySelector('#result-output');
 const swapBtn = document.querySelector('#swap-btn');
+*/
 
-const historyList = document.querySelector('#history-list'); // виправлено помилку в id (було #historu-list)
+const historyList = document.querySelector('#history-list');
 const historyCount = document.querySelector('#history-count');
 
+/* замінено на computed result() у компоненті ConverterForm (js/app.js).
 function calculateConversion() {
     const amount = Number(amountInput.value); // приводить до числа
     const from = sourceUnitSelect.value;
     const to = targetUnitSelect.value;
 
-    // Виправлено: додано фігурні дужки та пробіл
     if (!amount || amount <= 0) {
         resultOutput.textContent = '0.00 ' + to;
         return 0;
@@ -153,13 +160,13 @@ if (swapBtn) { // обробник кнопки швидкого обміну в
         calculateConversion();
     });
 }
+*/
 
 function renderHistory(items) { // функція рендеру історії
     historyList.innerHTML = '';
 
     items.forEach((item) => {
         const li = document.createElement('li');
-        // Виправлено: додано закриваючу зворотну лапку перед крапкою з комою
         li.textContent = `${item.amount} ${item.from} → ${item.result} ${item.to}`;
         li.dataset.result = item.result;
 
@@ -173,6 +180,13 @@ function renderHistory(items) { // функція рендеру історії
     historyCount.textContent = `Кількість збережених операцій: ${items.length}`;
 }
 
+// нове - отримує запис від Vue-компонента (подія 'conversion-saved' з js/app.js) і додає його в історію вже наявним кодом (conversionHistory + renderHistory)
+document.addEventListener('conversion-saved', (event) => {
+    conversionHistory.push(event.detail);
+    renderHistory(conversionHistory);
+});
+
+/* старий обробник submit замінено компонентом (форму, reset і підрахунок тепер веде Vue).
 form.addEventListener('submit', (event) => { // обробник події submit форми
     event.preventDefault(); // скасовує перезавантаження сторінки
 
@@ -194,3 +208,4 @@ form.addEventListener('submit', (event) => { // обробник події subm
     form.reset(); // очищення полів форми
     resultOutput.textContent = '0.00 ' + targetUnitSelect.value;
 });
+*/
