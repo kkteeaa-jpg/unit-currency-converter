@@ -24,6 +24,9 @@ const ConverterForm = {
             if (!amount || amount <= 0) {//та сама перевірка, що була в calculateConversion()
                 return 0;
             }
+            if (!this.rates[this.fromUnit] || !this.rates[this.toUnit]) {//якщо курсу немає - повертаємо 0, а не NaN
+                return 0;
+            }
             const amountInUSD = amount / this.rates[this.fromUnit];//спочатку у долар, потім у цільову валюту
             const converted = amountInUSD * this.rates[this.toUnit];
             return Number(converted.toFixed(2));

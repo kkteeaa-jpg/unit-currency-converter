@@ -98,11 +98,120 @@ async function loadData() {//головна асинхронна функція 
 
 loadData();//автоматичний запуск при відкритті сторінки
 
-if (refreshBtn) {//"слухач"події на кнопку оновлення
+if (refreshBtn) {//"слухач" події на кнопку оновлення
     refreshBtn.addEventListener('click', loadData);
 }
 
-const conversionHistory = []; // масив для збереження записів історії
+const LS_KEY = 'conversionHistory';
+const LS_MIGRATED_KEY = 'migrated';
+const dbErrorBox = document.querySelector('#db-error');
+
+function showDbError(message) {//повідомлення про недоступність бази
+    if (!dbErrorBox) return;
+    dbErrorBox.textContent = message;
+    dbErrorBox.style.display = message ? 'block' : 'none';
+}
+
+function saveToLocalStorage(items) {//localStorage (синхронне сховище "ключ - рядок")
+    localStorage.setItem(LS_KEY, JSON.stringify(items));// масив у JSON-рядок 
+}
+
+function loadFromLocalStorage() {// JSON-рядок у масив
+    try {
+        const raw = localStorage.getItem(LS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (error) {// пошкоджені дані не повинні ламати застосунок
+        console.error('Пошкоджені дані в localStorage:', error);
+        return [];
+    }
+}
+
+const DB_NAME = 'ConverterDB';//IndexedDB (асинхронна база, працює через транзакції)
+const DB_VERSION = 1;
+const STORE_NAME = 'history';
+let dbPromise = null;
+
+function openDB() {// відкриває базу; object store створюється лише в onupgradeneeded
+    if (dbPromise) return dbPromise;// повторно базу не відкриваємо
+    dbPromise = new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) {
+            reject(new Error('IndexedDB не підтримується'));
+            return;
+        }
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    }).catch((error) => {
+        dbPromise = null;// дозволяє спробувати відкрити базу ще раз
+        throw error;
+    });
+    return dbPromise;
+}
+
+async function addItem(item) {// додає запис (або оновлює, якщо id вже існує), повертає id
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const request = tx.objectStore(STORE_NAME).put(item);
+        let newId;
+        request.onsuccess = () => { newId = request.result; };
+        tx.oncomplete = () => resolve(newId);
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function getAllItems() {// повертає всі записи зі сховища
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const request = tx.objectStore(STORE_NAME).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function deleteItem(id) {// видаляє запис за id
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function migrateFromLocalStorage() {// одноразова міграція: якщо база порожня, а в localStorage є дані - переносимо їх
+    if (localStorage.getItem(LS_MIGRATED_KEY) === 'true') return; // вже переносили
+
+    const existing = await getAllItems();
+    const oldItems = loadFromLocalStorage();
+
+    if (existing.length === 0 && oldItems.length > 0) {
+        for (const old of oldItems) {
+            const { id, ...rest } = old;// новий id видасть autoIncrement
+            await addItem({ ...rest, timestamp: rest.timestamp ?? Date.now() });
+        }
+        console.log(`Міграція: перенесено записів - ${oldItems.length}`);
+    }
+    localStorage.setItem(LS_MIGRATED_KEY, 'true');// прапорець проти повторної міграції
+}
+
+async function refreshHistory() {// читає всю історію з бази, сортує за timestamp і малює останні 10
+    try {
+        const all = await getAllItems();
+        const last10 = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
+        renderHistory(last10, all.length);
+    } catch (error) {
+        console.error('Помилка читання історії:', error);
+        showDbError('Не вдалося прочитати історію з бази даних.');
+    }
+}
 
 /* ручний код форми конвертера (пошук елементів, calculateConversion, слухачі input/change/click)
    замінено Vue-компонентом ConverterForm у js/app.js. Тепер стан зберігає Vue, а результат - computed-значення
@@ -163,12 +272,13 @@ if (swapBtn) { // обробник кнопки швидкого обміну в
 }
 */
 
-function renderHistory(items) { // функція рендеру історії
+function renderHistory(items, total = items.length) { // функція рендеру історії (total - усього записів у базі)
     historyList.innerHTML = '';
 
     items.forEach((item) => {
         const li = document.createElement('li');
-        li.textContent = `${item.amount} ${item.from} → ${item.result} ${item.to}`;
+        const time = new Date(item.timestamp).toLocaleString('uk-UA');// час конвертації
+        li.textContent = `${item.amount} ${item.from} → ${item.result} ${item.to} (${time})`;
         li.dataset.result = item.result;
 
         if (item.result > 1000) {
@@ -178,13 +288,29 @@ function renderHistory(items) { // функція рендеру історії
         historyList.append(li);
     });
 
-    historyCount.textContent = `Кількість збережених операцій: ${items.length}`;
+    historyCount.textContent = `Кількість збережених операцій: ${total} (показано останні ${items.length})`;
 }
 
-// нове - отримує запис від Vue-компонента (подія 'conversion-saved' з js/app.js) і додає його в історію вже наявним кодом (conversionHistory + renderHistory)
-document.addEventListener('conversion-saved', (event) => {
-    conversionHistory.push(event.detail);
-    renderHistory(conversionHistory);
+document.addEventListener('conversion-saved', async (event) => {// отримує запис від Vue-компонента (подія 'conversion-saved' з js/app.js) і тепер зберігає його в IndexedDB
+    const record = { ...event.detail, timestamp: Date.now() }; // додаємо час для сортування
+    try {
+        await addItem(record);
+        await refreshHistory();// перемальовуємо список із бази
+    } catch (error) {
+        console.error('Помилка збереження:', error);
+        showDbError('IndexedDB недоступна (можливо, приватний режим). Історія не зберігається.');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', async () => {// при завантаженні сторінки: відкриваємо базу, переносимо старі дані, показуємо історію
+    try {
+        await openDB();
+        await migrateFromLocalStorage();
+        await refreshHistory();
+    } catch (error) {
+        console.error('Не вдалося відкрити IndexedDB:', error);
+        showDbError('IndexedDB недоступна (можливо, приватний режим). Історія не зберігається.');
+    }
 });
 
 /* старий обробник submit замінено компонентом (форму, reset і підрахунок тепер веде Vue).
