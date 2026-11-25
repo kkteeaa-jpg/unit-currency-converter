@@ -3,7 +3,7 @@
 const ConverterForm = {
     props: ['rates'],//курси валют приходять ЗВЕРХУ через props - компонент не звертається до глобальних змінних
 
-    emits: ['save'],//подія, яку компонент повідомляє батьківському застосунку
+    emits: ['save', 'pair-change'],//подія, яку компонент повідомляє батьківському застосунку
 
     data() {//власний реактивний стан компонента (замість querySelector і .value)
         return {
@@ -18,7 +18,16 @@ const ConverterForm = {
         };
     },
 
+    watch: {//зміна пари валют (у т.ч. кнопкою swap) оновлює графік курсу
+        pair() {
+            this.$emit('pair-change', { from: this.fromUnit, to: this.toUnit });
+        }
+    },
+
     computed: {//похідне значення: Vue САМ перераховує його, коли змінюється amount, fromUnit, toUnit або rates
+        pair() {//одне значення на пару, щоб swap викликав лише одне оновлення
+            return `${this.fromUnit}>${this.toUnit}`;
+        },
         result() {
             const amount = Number(this.amount);//приводить до числа
             if (!amount || amount <= 0) {//та сама перевірка, що була в calculateConversion()
@@ -98,6 +107,9 @@ Vue.createApp({
     },
 
     methods: {
+        onPairChange(pair) {//практикум 12: передає зміну пари валют коду графіка у script.js
+            document.dispatchEvent(new CustomEvent('pair-changed', { detail: pair }));
+        },
         onSave(record) {//отримує запис від компонента й передає його коду історії у script.js
             document.dispatchEvent(new CustomEvent('conversion-saved', { detail: record }));
         }

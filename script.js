@@ -55,6 +55,17 @@ function renderRates(ratesData) { // функція рендеру списку 
     countContainer.textContent = `Кількість валют у списку: ${entries.length}`; // оновлюємо кількість валют
 }
 
+async function loadUahRate() {//отримує актуальний курс гривні (скільки UAH за 1 USD) і підставляє у rates замість стартового значення
+    try {
+        const usdRates = await fetchDayRates('latest', 'USD');
+        if (usdRates.uah) {
+            rates.UAH = Number(usdRates.uah.toFixed(4));
+        }
+    } catch (error) {//якщо не вийшло - лишається стартовий курс із rates, застосунок працює далі
+        console.error('Не вдалося отримати курс UAH, використано стартовий:', error);
+    }
+}
+
 async function loadData() {//головна асинхронна функція запиту до АРІ
     showLoading(true);//Показує статус завантаження
     showError('');//скидає старі помилки
@@ -77,6 +88,8 @@ async function loadData() {//головна асинхронна функція 
             [data.base]: 1,
             ...data.rates
         };
+
+         await loadUahRate();//Frankfurter не має гривні - беремо актуальний курс UAH з іншого API
 
          renderRates(rates);//передає нові дані у функцію рендеру списку
 
@@ -207,6 +220,7 @@ async function refreshHistory() {// читає всю історію з бази
         const all = await getAllItems();
         const last10 = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
         renderHistory(last10, all.length);
+        drawHistoryChart(last10);//графік результатів тих самих 10 записів з IndexedDB
     } catch (error) {
         console.error('Помилка читання історії:', error);
         showDbError('Не вдалося прочитати історію з бази даних.');
@@ -291,16 +305,29 @@ function renderHistory(items, total = items.length) { // функція ренд
     historyCount.textContent = `Кількість збережених операцій: ${total} (показано останні ${items.length})`;
 }
 
-const chartCanvas = document.querySelector('#history-chart');
-const chartCtx = chartCanvas ? chartCanvas.getContext('2d') : null;//2D-контекст для малювання
-const CHART_PAD = { top: 20, right: 20, bottom: 30, left: 60 };//відступи для осей і підписів
+//два графіки на Canvas - 1-ий  результати останніх конвертацій з IndexedDB, 2-ий курс вибраної пари валют за останні дні (API)
+function createChart(selector) {//обгортка над полотном: окремі контекст і id анімації, щоб два графіки не заважали один одному
+    const canvas = document.querySelector(selector);
+    return { canvas, ctx: canvas ? canvas.getContext('2d') : null, animationId: null };
+}
+
+const historyChart = createChart('#history-chart');//графік 1: історія конвертацій (практикум 11)
+const rateChart = createChart('#rate-chart');//графік 2: курс пари за останні дні (практикум 9)
+const chartTitle = document.querySelector('#chart-title');//підпис над графіком курсу
+const CHART_PAD = { top: 20, right: 20, bottom: 30, left: 65 };//відступи для осей і підписів
 const CHART_ANIMATION_MS = 800;//тривалість «домальовування» лінії
 const CHART_COLOR = '#0369a1';
-let chartAnimationId = null;//id кадру, щоб можна було скасувати анімацію
+const CHART_DAYS = 10;//скільки останніх днів показувати на графіку курсу
+const RATE_SOURCES = [//основне джерело (jsDelivr) і запасне (Cloudflare Pages): ті самі дані, різні сервери
+    (date, code) => `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/${code}.json`,
+    (date, code) => `https://${date}.currency-api.pages.dev/v1/currencies/${code}.json`
+];
+let chartRequestId = 0;//номер запиту: відкидає застарілі відповіді, якщо пару змінили під час завантаження
+const ratesCache = new Map();//кеш: 'дата/валюта' -> курси, щоб не робити повторних запитів
 
-function chartPoints(values) {//переводить значення результатів у координати на полотні
-    const w = chartCanvas.width - CHART_PAD.left - CHART_PAD.right;
-    const h = chartCanvas.height - CHART_PAD.top - CHART_PAD.bottom;
+function chartPoints(chart, values) {//переводить значення у координати на полотні
+    const w = chart.canvas.width - CHART_PAD.left - CHART_PAD.right;
+    const h = chart.canvas.height - CHART_PAD.top - CHART_PAD.bottom;
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min || 1;//якщо всі значення однакові - уникаємо ділення на 0
@@ -310,39 +337,51 @@ function chartPoints(values) {//переводить значення резул
     }));
 }
 
-function drawChartFrame(values, progress) {//малює один кадр; progress 0..1 - яка частина лінії вже видима
-    const { width, height } = chartCanvas;
-    chartCtx.clearRect(0, 0, width, height);//обов'язково очищаємо попередній кадр
+function drawChartFrame(chart, values, labels, progress, options) {//малює один кадр; progress 0..1 - яка частина лінії вже видима
+    const { ctx } = chart;
+    const { width, height } = chart.canvas;
+    ctx.clearRect(0, 0, width, height);//обов'язково очищаємо попередній кадр
 
-    chartCtx.strokeStyle = '#999';//осі
-    chartCtx.lineWidth = 1;
-    chartCtx.beginPath();
-    chartCtx.moveTo(CHART_PAD.left, CHART_PAD.top);
-    chartCtx.lineTo(CHART_PAD.left, height - CHART_PAD.bottom);
-    chartCtx.lineTo(width - CHART_PAD.right, height - CHART_PAD.bottom);
-    chartCtx.stroke();
+    ctx.strokeStyle = '#999';//осі
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(CHART_PAD.left, CHART_PAD.top);
+    ctx.lineTo(CHART_PAD.left, height - CHART_PAD.bottom);
+    ctx.lineTo(width - CHART_PAD.right, height - CHART_PAD.bottom);
+    ctx.stroke();
 
-    chartCtx.fillStyle = '#555';//підписи мінімуму і максимуму
-    chartCtx.font = '12px sans-serif';
-    chartCtx.textAlign = 'right';
-    chartCtx.fillText(Math.max(...values).toFixed(2), CHART_PAD.left - 6, CHART_PAD.top + 4);
-    chartCtx.fillText(Math.min(...values).toFixed(2), CHART_PAD.left - 6, height - CHART_PAD.bottom);
+    const pts = chartPoints(chart, values);
 
-    const pts = chartPoints(values);
+    ctx.fillStyle = '#555';//підписи мінімуму і максимуму (вісь Y)
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.max(...values).toFixed(options.decimals), CHART_PAD.left - 6, CHART_PAD.top + 4);
+    ctx.fillText(Math.min(...values).toFixed(options.decimals), CHART_PAD.left - 6, height - CHART_PAD.bottom);
+
+    if (options.allLabels) {//підпис під кожною точкою (графік історії: валюта результату)
+        ctx.textAlign = 'center';
+        pts.forEach((p, i) => ctx.fillText(labels[i], p.x, height - 8));
+    } else {//лише перша й остання дата (графік курсу)
+        ctx.textAlign = 'left';
+        ctx.fillText(labels[0], CHART_PAD.left, height - 8);
+        ctx.textAlign = 'right';
+        ctx.fillText(labels[labels.length - 1], width - CHART_PAD.right, height - 8);
+    }
+
     const drawn = progress * (pts.length - 1);//скільки сегментів лінії вже показано
 
-    chartCtx.strokeStyle = CHART_COLOR;
-    chartCtx.lineWidth = 2.5;
-    chartCtx.lineJoin = 'round';
-    chartCtx.beginPath();
-    chartCtx.moveTo(pts[0].x, pts[0].y);
+    ctx.strokeStyle = CHART_COLOR;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) {
         if (i <= drawn) {
-            chartCtx.lineTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[i].x, pts[i].y);
         } else {
             const t = drawn - (i - 1);//частина останнього, ще не добудованого сегмента
             if (t > 0) {
-                chartCtx.lineTo(
+                ctx.lineTo(
                     pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t,
                     pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t
                 );
@@ -350,49 +389,143 @@ function drawChartFrame(values, progress) {//малює один кадр; progr
             break;
         }
     }
-    chartCtx.stroke();
+    ctx.stroke();
 
-    chartCtx.fillStyle = CHART_COLOR;//точки з'являються разом із лінією
+    ctx.fillStyle = CHART_COLOR;//точки з'являються разом із лінією
     pts.forEach((p, i) => {
         if (i <= drawn) {
-            chartCtx.beginPath();
-            chartCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-            chartCtx.fill();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
         }
     });
 }
 
-function drawHistoryChart(items) {//items - записи історії (новіші першими, як у refreshHistory)
-    if (!chartCtx) return;
-    cancelAnimationFrame(chartAnimationId);//зупиняємо попередню анімацію, якщо вона ще йшла
+function drawChartMessage(chart, text) {//текст на полотні замість графіка (завантаження, помилка, порожня історія)
+    cancelAnimationFrame(chart.animationId);
+    chart.ctx.clearRect(0, 0, chart.canvas.width, chart.canvas.height);
+    chart.ctx.fillStyle = '#777';
+    chart.ctx.font = '14px sans-serif';
+    chart.ctx.textAlign = 'center';
+    chart.ctx.fillText(text, chart.canvas.width / 2, chart.canvas.height / 2);
+}
 
-    const values = items.map((item) => item.result).reverse();//від старих до нових, зліва направо
-    if (values.length === 0) {
-        chartCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-        chartCtx.fillStyle = '#777';
-        chartCtx.font = '14px sans-serif';
-        chartCtx.textAlign = 'center';
-        chartCtx.fillText('Поки немає історії конвертацій', chartCanvas.width / 2, chartCanvas.height / 2);
-        return;
-    }
-
+function animateChart(chart, values, labels, options) {//цикл анімації через requestAnimationFrame
+    cancelAnimationFrame(chart.animationId);//зупиняємо попередню анімацію цього графіка, якщо вона ще йшла
     let start = null;
-    function step(timestamp) {//цикл анімації через requestAnimationFrame
+    function step(timestamp) {
         if (start === null) start = timestamp;
         const progress = Math.min((timestamp - start) / CHART_ANIMATION_MS, 1);
-        drawChartFrame(values, progress);
+        drawChartFrame(chart, values, labels, progress, options);
         if (progress < 1) {
-            chartAnimationId = requestAnimationFrame(step);//цикл зупиняється сам, коли лінію добудовано
+            chart.animationId = requestAnimationFrame(step);//цикл зупиняється сам, коли лінію добудовано
         }
     }
-    chartAnimationId = requestAnimationFrame(step);
+    chart.animationId = requestAnimationFrame(step);
 }
+
+function drawHistoryChart(items) {//графік 1: результати останніх конвертацій (items - новіші першими, як у refreshHistory)
+    if (!historyChart.ctx) return;
+    if (items.length === 0) {
+        drawChartMessage(historyChart, 'Поки немає історії конвертацій');
+        return;
+    }
+    const ordered = [...items].reverse();//від старих до нових, зліва направо
+    animateChart(
+        historyChart,
+        ordered.map((item) => item.result),
+        ordered.map((item) => item.to),//під точкою - валюта, у якій отримано результат
+        { decimals: 2, allLabels: true }
+    );
+}
+
+function formatIsoDate(date) {//Date -> 'рррр-мм-дд', як вимагає API
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${m}-${d}`;
+}
+
+async function fetchDayRates(date, from) {//усі курси однієї валюти за конкретну дату, наприклад { uah: 41.5, eur: 0.9, ... }
+    const key = `${date}/${from}`;
+    if (date !== 'latest' && ratesCache.has(key)) return ratesCache.get(key);//'latest' не кешуємо, щоб кнопка «Оновити курс» брала свіже значення
+
+    for (const makeUrl of RATE_SOURCES) {//спочатку основне джерело, якщо не вийшло - запасне
+        try {
+            const response = await fetch(makeUrl(date, from.toLowerCase()));
+            if (!response.ok) continue;
+            const data = await response.json();
+            const rates = data[from.toLowerCase()];//відповідь: { date: '...', usd: { eur: 0.9, uah: 41.5, ... } }
+            if (date !== 'latest') ratesCache.set(key, rates);
+            return rates;
+        } catch (error) {
+            //мережева помилка - пробуємо наступне джерело
+        }
+    }
+    throw new Error(`Немає даних за ${date}`);
+}
+
+async function loadRateChart(from, to) {//графік 2: курс «з валюти» -> «в валюту» за останні дні
+    if (!rateChart.ctx) return;
+    const requestId = ++chartRequestId;
+    if (chartTitle) chartTitle.textContent = `Курс ${from} → ${to} за останні ${CHART_DAYS} днів`;
+
+    if (from === to) {
+        drawChartMessage(rateChart, 'Оберіть різні валюти');
+        return;
+    }
+    drawChartMessage(rateChart, 'Завантаження курсу...');
+
+    try {
+        const dates = [];//останні CHART_DAYS днів, закінчуючи вчорашнім (за сьогодні дані можуть ще не з'явитися)
+        for (let i = CHART_DAYS; i >= 1; i--) {
+            const day = new Date();
+            day.setDate(day.getDate() - i);
+            dates.push(formatIsoDate(day));
+        }
+
+        const results = await Promise.allSettled(dates.map((date) => fetchDayRates(date, from)));//окремий запит на кожен день
+        if (requestId !== chartRequestId) return;//пару вже змінили - ця відповідь застаріла
+
+        const points = [];
+        results.forEach((result, i) => {
+            const rate = result.status === 'fulfilled' ? result.value[to.toLowerCase()] : undefined;
+            if (rate) {//дні без даних просто пропускаємо
+                points.push({ date: dates[i], rate });
+            }
+        });
+
+        if (points.length < 2) throw new Error('Замало даних за період');
+        animateChart(
+            rateChart,
+            points.map((p) => p.rate),
+            points.map((p) => `${p.date.slice(8)}.${p.date.slice(5, 7)}`),//підпис осі X: дд.мм
+            { decimals: 4, allLabels: false }
+        );
+    } catch (error) {
+        if (requestId !== chartRequestId) return;
+        console.error('Помилка завантаження курсу для графіка:', error);
+        drawChartMessage(rateChart, 'Не вдалося завантажити курс');
+    }
+}
+
+document.addEventListener('pair-changed', (event) => {//користувач змінив пару валют у формі (подія з js/app.js)
+    loadRateChart(event.detail.from, event.detail.to);
+});
+
+document.addEventListener('DOMContentLoaded', () => {//початковий графік курсу для пари, обраної у формі після завантаження
+    const fromSelect = document.querySelector('#source-unit');
+    const toSelect = document.querySelector('#target-unit');
+    if (fromSelect && toSelect) {
+        loadRateChart(fromSelect.value, toSelect.value);
+    }
+});
 
 document.addEventListener('conversion-saved', async (event) => {// отримує запис від Vue-компонента (подія 'conversion-saved' з js/app.js) і тепер зберігає його в IndexedDB
     const record = { ...event.detail, timestamp: Date.now() }; // додаємо час для сортування
     try {
         await addItem(record);
         await refreshHistory();// перемальовуємо список із бази
+        loadRateChart(record.from, record.to);//після збереження графік курсу цієї пари анімується заново
     } catch (error) {
         console.error('Помилка збереження:', error);
         showDbError('IndexedDB недоступна (можливо, приватний режим). Історія не зберігається.');
