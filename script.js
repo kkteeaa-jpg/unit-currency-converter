@@ -291,6 +291,103 @@ function renderHistory(items, total = items.length) { // функція ренд
     historyCount.textContent = `Кількість збережених операцій: ${total} (показано останні ${items.length})`;
 }
 
+const chartCanvas = document.querySelector('#history-chart');
+const chartCtx = chartCanvas ? chartCanvas.getContext('2d') : null;//2D-контекст для малювання
+const CHART_PAD = { top: 20, right: 20, bottom: 30, left: 60 };//відступи для осей і підписів
+const CHART_ANIMATION_MS = 800;//тривалість «домальовування» лінії
+const CHART_COLOR = '#0369a1';
+let chartAnimationId = null;//id кадру, щоб можна було скасувати анімацію
+
+function chartPoints(values) {//переводить значення результатів у координати на полотні
+    const w = chartCanvas.width - CHART_PAD.left - CHART_PAD.right;
+    const h = chartCanvas.height - CHART_PAD.top - CHART_PAD.bottom;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;//якщо всі значення однакові - уникаємо ділення на 0
+    return values.map((v, i) => ({
+        x: CHART_PAD.left + (values.length === 1 ? w / 2 : (i / (values.length - 1)) * w),
+        y: CHART_PAD.top + h - ((v - min) / range) * h
+    }));
+}
+
+function drawChartFrame(values, progress) {//малює один кадр; progress 0..1 - яка частина лінії вже видима
+    const { width, height } = chartCanvas;
+    chartCtx.clearRect(0, 0, width, height);//обов'язково очищаємо попередній кадр
+
+    chartCtx.strokeStyle = '#999';//осі
+    chartCtx.lineWidth = 1;
+    chartCtx.beginPath();
+    chartCtx.moveTo(CHART_PAD.left, CHART_PAD.top);
+    chartCtx.lineTo(CHART_PAD.left, height - CHART_PAD.bottom);
+    chartCtx.lineTo(width - CHART_PAD.right, height - CHART_PAD.bottom);
+    chartCtx.stroke();
+
+    chartCtx.fillStyle = '#555';//підписи мінімуму і максимуму
+    chartCtx.font = '12px sans-serif';
+    chartCtx.textAlign = 'right';
+    chartCtx.fillText(Math.max(...values).toFixed(2), CHART_PAD.left - 6, CHART_PAD.top + 4);
+    chartCtx.fillText(Math.min(...values).toFixed(2), CHART_PAD.left - 6, height - CHART_PAD.bottom);
+
+    const pts = chartPoints(values);
+    const drawn = progress * (pts.length - 1);//скільки сегментів лінії вже показано
+
+    chartCtx.strokeStyle = CHART_COLOR;
+    chartCtx.lineWidth = 2.5;
+    chartCtx.lineJoin = 'round';
+    chartCtx.beginPath();
+    chartCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        if (i <= drawn) {
+            chartCtx.lineTo(pts[i].x, pts[i].y);
+        } else {
+            const t = drawn - (i - 1);//частина останнього, ще не добудованого сегмента
+            if (t > 0) {
+                chartCtx.lineTo(
+                    pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t,
+                    pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t
+                );
+            }
+            break;
+        }
+    }
+    chartCtx.stroke();
+
+    chartCtx.fillStyle = CHART_COLOR;//точки з'являються разом із лінією
+    pts.forEach((p, i) => {
+        if (i <= drawn) {
+            chartCtx.beginPath();
+            chartCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            chartCtx.fill();
+        }
+    });
+}
+
+function drawHistoryChart(items) {//items - записи історії (новіші першими, як у refreshHistory)
+    if (!chartCtx) return;
+    cancelAnimationFrame(chartAnimationId);//зупиняємо попередню анімацію, якщо вона ще йшла
+
+    const values = items.map((item) => item.result).reverse();//від старих до нових, зліва направо
+    if (values.length === 0) {
+        chartCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+        chartCtx.fillStyle = '#777';
+        chartCtx.font = '14px sans-serif';
+        chartCtx.textAlign = 'center';
+        chartCtx.fillText('Поки немає історії конвертацій', chartCanvas.width / 2, chartCanvas.height / 2);
+        return;
+    }
+
+    let start = null;
+    function step(timestamp) {//цикл анімації через requestAnimationFrame
+        if (start === null) start = timestamp;
+        const progress = Math.min((timestamp - start) / CHART_ANIMATION_MS, 1);
+        drawChartFrame(values, progress);
+        if (progress < 1) {
+            chartAnimationId = requestAnimationFrame(step);//цикл зупиняється сам, коли лінію добудовано
+        }
+    }
+    chartAnimationId = requestAnimationFrame(step);
+}
+
 document.addEventListener('conversion-saved', async (event) => {// отримує запис від Vue-компонента (подія 'conversion-saved' з js/app.js) і тепер зберігає його в IndexedDB
     const record = { ...event.detail, timestamp: Date.now() }; // додаємо час для сортування
     try {
